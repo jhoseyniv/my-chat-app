@@ -4,7 +4,10 @@ import { Container, Row, Col, Card, Form, Button } from 'react-bootstrap';
 import { NavBar, ChatCard, Message, AddNewChat } from './components/Components.js';
 import { ethers } from "ethers";
 import { abi } from "./abi";
+import AES from 'crypto-js/aes';
+import Utf8 from 'crypto-js/enc-utf8';
 
+//const {  Web3Encryption, web3Encrypt, web3Decrypt, constructWeb3 } = require('web3-encrypt')
 // Add the contract address inside the quotes
 const CONTRACT_ADDRESS = "0xC3CaE6142C876F7237bB8732207C6FCBE7303DeE"; 
 
@@ -81,12 +84,15 @@ export function App( props ) {
 			alert("Invalid address!")
 		}
     }
-
+ 
     // Sends messsage to an user 
     async function sendMessage( data ) {
         if( !( activeChat && activeChat.publicKey ) ) return;
         const recieverAddress = activeChat.publicKey;
-        await myContract.sendMessage( recieverAddress, data );
+       // const data2 = {key: 'Test Value'};
+        const ciphertext = AES.encrypt(JSON.stringify(data), "secretKey").toString();
+
+        await myContract.sendMessage( recieverAddress, ciphertext );
     } 
 
     // Fetch chat messages with a friend 
@@ -100,10 +106,13 @@ export function App( props ) {
         // Get messages
         const data = await myContract.readMessage( friendsPublicKey );
         data.forEach( ( item ) => {
+            const bytes = AES.decrypt(item[2], "secretKey");
+            const decryptedData = JSON.stringify(bytes.toString(Utf8));
             const timestamp = new Date( 1000*item[1].toNumber() ).toUTCString();
-            messages.push({ "publicKey": item[0], "timeStamp": timestamp, "data": item[2] });
+            messages.push({ "publicKey": item[0], "timeStamp": timestamp, "data": decryptedData });
         });
         setActiveChat({ friendname: nickname, publicKey: friendsPublicKey });
+
         setActiveChatMessages( messages );
     }
 
@@ -179,6 +188,18 @@ export function App( props ) {
                                     </Button>
                                 </Card.Header>
                             </Card>
+                            <Card style={{ width:'100%', alignSelf:'center', margin:"0 0 5px 15px" }}>
+                                <Card.Header>
+                                    { activeChat.friendname } : { activeChat.publicKey }
+                                    <Button style={{ float:"right" }} variant="warning" onClick={ () => {
+                                        if( activeChat && activeChat.publicKey )
+                                            getMessage( activeChat.publicKey );
+                                    } }>
+                                        Clear Messages
+                                    </Button>
+                                </Card.Header>
+                            </Card>
+
                         </Row>
                         {/* The messages will be shown here */}
                         <div className="MessageBox" style={{ height:"400px", overflowY:"auto" }}>
